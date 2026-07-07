@@ -1,79 +1,34 @@
 import json
-from datetime import datetime
 
-class OmniNetIngestionEngine:
-    """
-    Standardizes inconsistent data streams from multiple manufacturers
-    into a unified, universally readable telemetry format.
-    """
-    
-    @staticmethod
-    def parse_manufacturer_a(hex_packet):
-        """
-        Manufacturer A sends data in a Hexadecimal format to save bandwidth.
-        Format: [2 chars DeviceID][4 chars Voltage x10][4 chars Current x100]
-        Example: "0108fc01f4" -> Device 01, 230.0V, 5.00A
-        """
-        try:
-            device_id = str(int(hex_packet[0:2], 16))
-            voltage = int(hex_packet[2:6], 16) / 10.0
-            current = int(hex_packet[6:10], 16) / 100.0
-            
+def parse_hex_payload(hex_str):
+    try:
+        # Convert hexadecimal string back to regular text
+        decoded_text = bytes.fromhex(hex_str).decode('utf-8')
+        return parse_csv_payload(decoded_text)
+    except Exception as e:
+        print(f"⚠️ Error parsing HEX data: {e}")
+        return None
+
+def parse_csv_payload(csv_str):
+    try:
+        # Expected CSV structure: DeviceID, Temperature, Humidity, Status
+        parts = csv_str.strip().split(',')
+        if len(parts) >= 4:
             return {
-                "timestamp": datetime.utcnow().isoformat() + "Z",
-                "device_id": f"OMNI-A-{device_id.zfill(3)}",
-                "metrics": {
-                    "voltage_v": voltage,
-                    "current_a": current,
-                    "power_w": round(voltage * current, 2)
+                "device_id": parts[0],
+                "telemetry": {
+                    "temperature_c": float(parts[1]),
+                    "humidity_percent": float(parts[2])
                 },
-                "status": "ONLINE"
+                "system_status": parts[3],
+                "layer_protocol": "OmniNET-Normalized"
             }
-        except Exception as e:
-            return {"error": f"Failed to parse Manufacturer A payload: {str(e)}"}
+    except Exception as e:
+        print(f"⚠️ Error parsing CSV data: {e}")
+    return None
 
-    @staticmethod
-    def parse_manufacturer_b(csv_packet):
-        """
-        Manufacturer B passes data in a simple human-readable CSV string.
-        Format: "DeviceID,Voltage,Current,Status"
-        Example: "DEV-99,228.5,4.85,OK"
-        """
-        try:
-            parts = csv_packet.split(',')
-            device_id = parts[0].strip()
-            voltage = float(parts[1])
-            current = float(parts[2])
-            status = "ONLINE" if parts[3].strip() == "OK" else "FAULT"
-            
-            return {
-                "timestamp": datetime.utcnow().isoformat() + "Z",
-                "device_id": f"OMNI-B-{device_id}",
-                "metrics": {
-                    "voltage_v": voltage,
-                    "current_a": current,
-                    "power_w": round(voltage * current, 2)
-                },
-                "status": status
-            }
-        except Exception as e:
-            return {"error": f"Failed to parse Manufacturer B payload: {str(e)}"}
-
-
-# --- Local Test Execution ---
 if __name__ == "__main__":
-    print("--- OmniNET SCADA: Protocol Ingestion Test --- \n")
-    engine = OmniNetIngestionEngine()
-    
-    # Simulating raw streams coming from different factory field hardware
-    raw_payload_a = "0108fc01f4"  # Hex data
-    raw_payload_b = "DEV-99,228.5,4.85,OK"  # CSV data
-    
-    # Normalize data structures cleanly through our abstraction layer
-    normalized_a = engine.parse_manufacturer_a(raw_payload_a)
-    normalized_b = engine.parse_manufacturer_b(raw_payload_b)
-    
-    print("[1] Manufacturer A Normalized Payload:")
-    print(json.dumps(normalized_a, indent=4))
-    print("\n[2] Manufacturer B Normalized Payload:")
-    print(json.dumps(normalized_b, indent=4))
+    # Local self-test
+    print("Testing parser functions locally...")
+    sample_csv = "M02,23.8,78.4,NORMAL"
+    print(parse_csv_payload(sample_csv))
