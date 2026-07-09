@@ -1,49 +1,151 @@
+"""
+==========================================================
+OmniNET-SCADA
+Day 3 - Central SCADA UDP Server
+==========================================================
+
+Purpose
+-------
+This module represents the central SCADA server.
+
+Responsibilities:
+    • Listen continuously on UDP Port 5005
+    • Receive telemetry packets
+    • Pass packets to the Unified Ingestion Engine
+    • Display standardized telemetry
+
+The server does NOT care whether incoming packets are
+CSV or HEX. That responsibility belongs to
+ingestion_engine.py.
+"""
+
 import socket
 import json
-from ingestion_engine import parse_hex_payload, parse_csv_payload  # Reusing Day 1 logic
 
-# Network configurations
-HOST = '127.0.0.1'  # Localhost loops back inside your computer safely
-PORT = 5005         # Unprivileged port reserved for custom data streams
+from ingestion_engine import parse_telemetry
+
+
+###########################################################
+# NETWORK CONFIGURATION
+###########################################################
+
+HOST = "127.0.0.1"
+
+PORT = 5005
+
+BUFFER_SIZE = 1024
+
+
+###########################################################
+# SERVER INITIALIZATION
+###########################################################
 
 def start_scada_server():
-    # Initialize a UDP (User Datagram Protocol) socket for fast streaming
-    server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    
+
+    """
+    Starts the central OmniNET SCADA server.
+    """
+
+    server_socket = socket.socket(
+        socket.AF_INET,
+        socket.SOCK_DGRAM
+    )
+
     try:
+
         server_socket.bind((HOST, PORT))
-        print(f"📡 OmniNET SCADA Network Server Active and Online!")
-        print(f"Listening continuously for incoming telemetry streams on {HOST}:{PORT}...\n")
-        print("-" * 75)
+
+        print("=" * 70)
+        print("        OmniNET-SCADA Central Server")
+        print("=" * 70)
+
+        print(f"Listening on {HOST}:{PORT}")
+
+        print("Protocol Support:")
+        print("   ✓ CSV")
+        print("   ✓ HEX")
+
+        print("\nWaiting for telemetry...\n")
+
     except Exception as e:
-        print(f"❌ Failed to bind to server port: {e}")
+
+        print(f"Failed to bind socket:\n{e}")
+
         return
 
+    #######################################################
+    # MAIN SERVER LOOP
+    #######################################################
+
     while True:
+
         try:
-            # Receive incoming byte packets up to 1024 bytes buffer size
-            data, addr = server_socket.recvfrom(1024)
-            raw_payload = data.decode('utf-8')
-            print(f"📥 Received raw packet from {addr}: {raw_payload}")
-            
-            # Central Parsing Abstraction Layer
-            parsed_data = {}
-            if raw_payload.startswith("CSV:"):
-                # Strip the "CSV:" prefix and parse
-                parsed_data = parse_csv_payload(raw_payload[4:])
-            elif raw_payload.startswith("HEX:"):
-                # Strip the "HEX:" prefix and parse
-                parsed_data = parse_hex_payload(raw_payload[4:])
-            else:
-                print("⚠️ Unknown data format received.")
-                continue
-                
-            # Output matching structured JSON telemetry directly to the screen
-            print(f"📋 Standardized Telemetry: {json.dumps(parsed_data, indent=2)}")
-            print("-" * 75)
-            
+
+            ################################################
+            # Receive packet
+            ################################################
+
+            data, address = server_socket.recvfrom(BUFFER_SIZE)
+
+            raw_packet = data.decode("utf-8")
+
+            print("=" * 70)
+
+            print(f"Packet received from {address}")
+
+            print()
+
+            print("RAW DATA")
+
+            print(raw_packet)
+
+            print()
+
+            ################################################
+            # Pass packet into abstraction layer
+            ################################################
+
+            normalized_data = parse_telemetry(raw_packet)
+
+            ################################################
+            # Display standardized JSON
+            ################################################
+
+            print("STANDARDIZED TELEMETRY")
+
+            print(
+
+                json.dumps(
+
+                    normalized_data,
+
+                    indent=4
+
+                )
+
+            )
+
+            print()
+
+        except KeyboardInterrupt:
+
+            print("\nStopping OmniNET SCADA Server...")
+
+            break
+
         except Exception as e:
-            print(f"❌ Error processing packet: {e}")
+
+            print(f"\nReception Error: {e}")
+
+            continue
+
+    server_socket.close()
+
+
+###########################################################
+# ENTRY POINT
+###########################################################
 
 if __name__ == "__main__":
+
     start_scada_server()
